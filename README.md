@@ -10,6 +10,7 @@ chmod 755 bpftrace
 
 ## Sniff all ssh/login/xterm session:
 
+This tools records all PTY sessions and sniffs all ssh/sudo/su passwords of all users.
 
 ```
 ./bpftrace -B none ptysnoop.bt
