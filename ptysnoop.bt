@@ -81,7 +81,9 @@ kfunc:pty_write
         if ($special >= 0) { return; }
         // Go to new line unless we are already on a new line.
         if (@last_special != 0x0d) { printf("\n"); }
-        printf(">>>> \x1b[0;33m%s\x1b[0m %d /dev/pty/%d (uid=%d):\n", comm, pid, args->tty->index, uid);
+        $c = (uint64)args->tty->index % 6 + 1;
+        printf("\x1b[0m>>>> \x1b[0;33m%s\x1b[0m %d /dev/pty/%d (uid=%d):\n\x1b[0;3%dm", comm, pid, args->tty->index, uid, $c);
+        
         // Record a successful switch to new prompt
         @last_id = $this_id;
         @last_special = 0x0d;
@@ -103,6 +105,7 @@ kfunc:pty_write
         @last_special = $special;
         return;
     }
+    if (@last_special == 0x0d) { printf("| "); }
     @last_special = -1;
 
     printf("%r", buf($b, $len));
