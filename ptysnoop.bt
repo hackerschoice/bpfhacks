@@ -43,6 +43,7 @@ END
     delete(@last_special);
     delete(@last_id);
     delete(@is_tty_snoop);
+    delete(@color);
     printf("\n\x1b[1;37mJoin us on Telegram - https://t.me/thcorg\x1b[0m");
 }
 
@@ -81,8 +82,8 @@ kfunc:pty_write
         if ($special >= 0) { return; }
         // Go to new line unless we are already on a new line.
         if (@last_special != 0x0d) { printf("\n"); }
-        $c = (uint64)args->tty->index % 6 + 1;
-        printf("\x1b[0m>>>> \x1b[0;33m%s\x1b[0m %d /dev/pty/%d (uid=%d):\n\x1b[0;3%dm", comm, pid, args->tty->index, uid, $c);
+        @color = (uint64)args->tty->index % 6 + 1;
+        printf("\x1b[0m>>>> \x1b[0;33m%s\x1b[0m %d /dev/pty/%d (uid=%d):\n\x1b[0;3%dm", comm, pid, args->tty->index, uid, @color);
         
         // Record a successful switch to new prompt
         @last_id = $this_id;
@@ -96,9 +97,9 @@ kfunc:pty_write
         if (@last_special == 0x0d) { return; }
 
         if ($special == 0x08 || $special == 0x7f) {
-            printf("\x1b[2m\\d\x1b[0m");  // DEL
+            printf("\x1b[0;2m\\d\x1b[0;3%dm", @color);  // DEL
         } else if ($special == 0x09) {
-            printf("\x1b[2m\\t\x1b[0m");  // TAB
+            printf("\x1b[0;2m\\t\x1b[0;3%dm", @color);  // TAB
         } else if ($special == 0x0d) {
             printf("\n");
         }
