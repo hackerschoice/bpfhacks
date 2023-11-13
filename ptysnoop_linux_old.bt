@@ -1,0 +1,186 @@
+#! /usr/bin/env bpftrace
+/*
+ * Use this for OLD Linux pre 5.15.
+ *
+ * BPFTRACE_STRLEN=200 bpftrace -B none --no-warnings ./ptysnoop_linux_old.bt <PID> <PTY's FD>
+ *
+ * Limitations:
+ *   - Max FD for ptmx < 64.
+ *   - Not working for PTY's spawned via docker.
+ *   - You may need to delete the sys_enter_writev part below (for very old Linux systems)
+ */
+
+/*
+ TODO:
+ - close function must delete (@fds
+ */
+BEGIN
+{
+    @last_special = 0x0d;
+
+    if ($2 == 0) { return; }
+
+    @is_tty_snoop = 1;
+    if ($# >= 2) { @fds[$1, $2] = (uint64)$2; }
+    if ($# >= 4) { @fds[$3, $4] = (uint64)$4; }
+    if ($# >= 6) { @fds[$5, $6] = (uint64)$6; }
+    if ($# >= 8) { @fds[$7, $8] = (uint64)$8; }
+}
+
+END
+{
+    delete(@last_id);
+    delete(@last_special);
+    delete(@is_tty_snoop);
+    clear(@fds);
+}
+
+tracepoint:syscalls:sys_enter_openat,tracepoint:syscalls:sys_enter_open
+/$1 == 0/
+{
+    if (str(args->filename) != "/dev/ptmx") { return; }
+    if (@is_tty_snoop > 0) { return; }
+
+    if (comm == "sshd") { $hit = 1; }
+    if ($hit == 0 && strcontains(comm, "term") == 1) { $hit = 1; }
+    if ($hit == 0 && comm == "login") { $hit = 1; }
+    if ($hit == 0) { return; }
+    @is_ptmx[pid] = pid;
+}
+
+tracepoint:syscalls:sys_exit_openat,tracepoint:syscalls:sys_exit_open
+/$1 == 0 && args->ret >= 0 && args->ret < 64/
+{
+    if (@is_ptmx[pid] == 0) { return; }
+    delete(@is_ptmx[pid]);
+
+    @fds[pid, args->ret] = (uint64)args->ret;
+}
+
+tracepoint:syscalls:sys_enter_close
+/$1 == 0 && args->fd >= 0 && args->fd < 64/
+{
+    delete(@fds[pid, args->fd]);
+}
+
+
+tracepoint:sched:sched_process_exit
+/$1 == 0/
+{
+    $i = 0;
+    unroll(64) {
+        delete(@fds[pid, $i]);
+        $i += 1;
+    }
+}
+
+tracepoint:syscalls:sys_enter_write,
+/args->count > 0 && args->fd > 0/
+{
+    if (@fds[pid, args->fd]  == 0) { return; }
+
+    $b = args->buf;
+    $len = args->count;
+
+    // -----START IDENDICAL COPY FOR WRITEV-----
+    $last_id = @last_id;
+    $this_id = pid * 64 + args->fd;
+
+    // Do not output Arrow-UP/DOWN
+    if ($len == 3 && $b[0] == 0x1b) { return; }
+
+    $special = -1;
+    if ($len == 1) {
+        // Special character. Only output ONCE
+        if ($b[0] < 0x20 || $b[0] > 0x7e) {
+            $special = $b[0];
+        }
+    }
+
+    if ($last_id != $this_id) {
+        // PID has changed
+        if (@last_special != 0x0d) { printf("\n"); }
+		printf(">>>> \x1b[0;33m%d\x1b[0m %s (uid=%d):\n", pid, comm, uid);
+        @last_id = $this_id;
+        @last_special = -1;
+    }
+
+    if ($special >= 0) {
+        // Only output special characters ONCE.
+        if (@last_special == $special) { return; }
+        // Never output if at the beginning of a new line
+        if (@last_special == 0x0d) { return; }
+
+        if ($special == 0x08 || $special == 0x7f) {
+            printf("\x1b[2m\\d\x1b[0m");  // DEL
+        } else if ($special == 0x09) {
+            printf("\x1b[2m\\t\x1b[0m");  // TAB
+        } else if ($special == 0x0d) {
+            printf("\n");
+        }
+        @last_special = $special;
+        return;
+    }
+    @last_special = 0;
+
+    printf("%r", buf($b, $len));
+    // -----END IDENTICAL COPY FOR WRITEV-----
+}
+
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+// DELETE ALL BELOW HERE FOR VERY OLD LINUX SYSTEMS
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+tracepoint:syscalls:sys_enter_writev
+/args->vlen > 0/
+{
+    if (@fds[pid, args->fd] == 0) { return; }
+
+    $b = (uint8 *)args->vec[0].iov_base;
+    $len = args->vec[0].iov_len;
+
+    // -----START IDENDICAL COPY FOR WRITEV-----
+    $last_id = @last_id;
+    $this_id = pid * 64 + args->fd;
+
+    // Do not output Arrow-UP/DOWN
+    if ($len == 3 && $b[0] == 0x1b) { return; }
+
+    $special = -1;
+    if ($len == 1) {
+        // Special character. Only output ONCE
+        if ($b[0] < 0x20 || $b[0] > 0x7e) {
+            $special = $b[0];
+        }
+    }
+
+    if ($last_id != $this_id) {
+        // PID has changed
+        if (@last_special != 0x0d) { printf("\n"); }
+		printf(">>>> \x1b[0;33m%d\x1b[0m %s (uid=%d):\n", pid, comm, uid);
+        @last_id = $this_id;
+        @last_special = -1;
+    }
+
+    if ($special >= 0) {
+        // Only output special characters ONCE.
+        if (@last_special == $special) { return; }
+        // Never output if at the beginning of a new line
+        if (@last_special == 0x0d) { return; }
+
+        if ($special == 0x08 || $special == 0x7f) {
+            printf("\x1b[2m\\d\x1b[0m");  // DEL
+        } else if ($special == 0x09) {
+            printf("\x1b[2m\\t\x1b[0m");  // TAB
+        } else if ($special == 0x0d) {
+            printf("\n");
+        }
+        @last_special = $special;
+        return;
+    }
+    @last_special = 0;
+
+    printf("%r", buf($b, $len));
+    // -----END IDENTICAL COPY FOR WRITEV-----
+}
+
