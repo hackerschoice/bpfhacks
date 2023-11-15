@@ -4,7 +4,7 @@
  * bpftrace -B none ./ptysnoop.bt [PTY number]...
  *
  * Example 1 - Snoop on sshd, login and xterms:
- *   bpftrace -Bnone ./ptysnoop.bt
+ *   BPFTRACE_STRLEN=200 bpftrace -Bnone ./ptysnoop.bt
  *
  * Example 1 - Snoop on /dev/pty/0, ... /dev/pty/3:
  *   bpfrace -Bnone 0 1 2 3
@@ -23,7 +23,7 @@ BEGIN
 
     if ($1 != 31336) {
         printf("🦋 \x1b[0;33mTIP: Nicefy the output:\n");
-        printf("\x1b[0;36mbpftrace -Bnone ptysnoop.bt 31336 | sed -Eu -e 's/\\\\x0a\\\\x0d|\\\\x0d/\\n| /g' -e 's/\\\\x1b\\[[0-9;>]*[a-zA-Z~]|\\\\x1bO[ABCD]//g' -e 's/(\\\\x[0-9a-f]{2})+//g' -e 's/(\\\\[dt])+/\\1/g'\x1b[0m\n");
+        printf("\x1b[0;36mbpftrace -Bnone ptysnoop.bt 31336 | sed -Eu -e 's/\\\\x0a\\\\x0d|\\\\x0d/\\n| /g' -e 's/\\\\x1b\\[[0-9;><]*[a-zA-Z~]|\\\\x1bO[ABCD]//g' -e 's/(\\\\x[0-9a-f]{2})+//g' -e 's/(\\\\[dt])+/\\1/g'\x1b[0m\n");
         printf("-----\n");
     }
     if ($# == 0) { return; }
@@ -48,7 +48,7 @@ END
 {
     if ($1 != 31336) {
         printf("\n😘 \x1b[0;33mYou may want to nicefy a log like so:\n");
-        printf("\x1b[0;36mcat x.log | sed -E -e 's/\\\\x0a\\\\x0d|\\\\x0d/\\n| /g' -e 's/\\x1b\\[[0-9;]*m|\\\\x1b\\[[0-9;>]*[a-zA-Z~]|\\\\x1bO[ABCD]//g' -e 's/(\\\\x[0-9a-f]{2})+//g' -e 's/(\\\\[dt])+/\\1/g'");
+        printf("\x1b[0;36mcat x.log | sed -E -e 's/\\\\x0a\\\\x0d|\\\\x0d/\\n| /g' -e 's/\\x1b\\[[0-9;]*m|\\\\x1b\\[[0-9;><]*[a-zA-Z~]|\\\\x1bO[ABCD]//g' -e 's/(\\\\x[0-9a-f]{2})+//g' -e 's/(\\\\[dt])+/\\1/g'");
     }
     printf("\x1b[0m\n-----\n\x1b[1;37mJoin us on Telegram - https://t.me/thcorg\x1b[0m");
     delete(@last_special);
