@@ -4,10 +4,10 @@
  * bpftrace -B none ./ptysnoop.bt [PTY number]...
  *
  * Example 1 - Snoop on sshd, login and xterms:
- *   bpftrace -B none ./ptysnoop.bt
+ *   bpftrace -Bnone ./ptysnoop.bt
  *
  * Example 1 - Snoop on /dev/pty/0, ... /dev/pty/3:
- *   bpfrace -B none 0 1 2 3
+ *   bpfrace -Bnone 0 1 2 3
  *
  * FAQ:
  *   1. Download the latest bpftrace static binary for Linux:
@@ -21,10 +21,16 @@ BEGIN
 {
     @last_special = 0x0d;
 
+    if ($1 != 31336) {
+        printf("🦋 \x1b[0;33mTIP: Nicefy the output:\n");
+        printf("\x1b[0;36mbpftrace -Bnone ptysnoop.bt 31336 | sed -Eu -e 's/\\\\x0a\\\\x0d|\\\\x0d/\\n| /g' -e 's/\\\\x1b\\[[0-9;>]*[a-zA-Z~]|\\\\x1bO[ABCD]//g' -e 's/(\\\\x[0-9a-f]{2})+//g' -e 's/(\\\\[dt])+/\\1/g'\x1b[0m\n");
+        printf("-----\n");
+    }
     if ($# == 0) { return; }
+    if ($# == 1 && $1 == 31336) { return; }
 
     @is_tty_snoop = 1;
-    if ($# >= 1) { @all_tty[$1] = 1; }
+    if ($# >= 1 && $1 != 31336) { @all_tty[$1] = 1; }
     if ($# >= 2) { @all_tty[$2] = 1; }
     if ($# >= 3) { @all_tty[$3] = 1; }
     if ($# >= 4) { @all_tty[$4] = 1; }
@@ -40,14 +46,16 @@ BEGIN
 
 END
 {
+    if ($1 != 31336) {
+        printf("\n😘 \x1b[0;33mYou may want to nicefy a log like so:\n");
+        printf("\x1b[0;36mcat x.log | sed -E -e 's/\\\\x0a\\\\x0d|\\\\x0d/\\n| /g' -e 's/\\x1b\\[[0-9;]*m|\\\\x1b\\[[0-9;>]*[a-zA-Z~]|\\\\x1bO[ABCD]//g' -e 's/(\\\\x[0-9a-f]{2})+//g' -e 's/(\\\\[dt])+/\\1/g'");
+    }
+    printf("\x1b[0m\n-----\n\x1b[1;37mJoin us on Telegram - https://t.me/thcorg\x1b[0m");
     delete(@last_special);
     delete(@last_id);
     delete(@is_tty_snoop);
     delete(@color);
     clear(@all_tty);
-    printf("\n\x1b[0;33mYou may want to make your log file human readable like so:\n");
-    printf("\x1b[0;36mcat x.log | sed -E -e 's/\\\\x0a\\\\x0d|\\\\x0d/\\n| /g' -e 's/\\x1b\\[[0-9;]*m|\\\\x1b\\[[0-9;>]*[a-zA-Z~]|\\\\x1bO[ABCD]//g' -e 's/(\\\\x[0-9a-f]{2})+//g' -e 's/(\\\\[dt])+/\\1/g'\x1b[0m\n");
-    printf("-----\n\x1b[1;37mJoin us on Telegram - https://t.me/thcorg\x1b[0m");
 }
 
 kfunc:pty_write
