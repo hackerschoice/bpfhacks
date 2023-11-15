@@ -15,4 +15,6 @@ This tools records all PTY sessions and sniffs all ssh/sudo/su passwords of all 
 ```
 ./bpftrace -B none ptysnoop.bt
 ```
-
+<p align="center">
+<img width="675" alt="ptysnoop" src="https://github.com/hackerschoice/bpfhacks/assets/5938498/de068ae5-9cea-44fc-83a6-56e4d37dee93">
+</p>
