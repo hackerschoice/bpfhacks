@@ -1,6 +1,6 @@
 # eBPF tools
 
-A (short) collecton of eBPF enabled tools (needs root privileges to run);
+A (short) collecton of eBPF enabled tools (need root privileges to run);
 
 Prerequisite: Install the latest bpftrace tool:
 ```sh
