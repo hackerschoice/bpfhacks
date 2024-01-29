@@ -105,6 +105,7 @@ END
     clear(@sk);
     clear(@is_shift);
     clear(@is_ctrl);
+    clear(@is_alt);
 }
 
 // int kprobe__input_handle_event(struct pt_regs *ctx, struct input_dev *dev,
@@ -114,22 +115,13 @@ kprobe:input_handle_event
 {
     $type = arg2;
     $code = arg3;
-    $value = arg4;
 
-    // Map Right Shift on Left Shift
-    if ($code == 54) {
-        $code = 42;
-    }
-    if ($code == (uint64)(128 + 54)) {
-        $code = (uint64)(128 + 42);
-    }
-
-    if ($code == 42) {
+    if ($code == 42 || $code == 54) {
         // Shift PRESSED [down]
         @is_shift = 1;
         return;
     }
-    if ($code == (uint64)(128 + 42)) {
+    if ($code == (uint64)(128 + 42) || $code == (uint64)(128 + 54)) {
         // Shift RELEASED [up]
         @is_shift = 0;
         return;
@@ -141,6 +133,15 @@ kprobe:input_handle_event
     }    
     if ($code == (uint64)(128 + 0x1d)) {
         @is_ctrl = 0;
+        return;
+    }
+
+    if ($code == 0x38) {
+        @is_alt = 1;
+        return;
+    }
+    if ($code == (uint64)(128 + 0x38)) {
+        @is_alt = 0;
         return;
     }
 
@@ -159,19 +160,11 @@ kprobe:input_handle_event
         printf("[CAPS-LOCK]");
         return;
     }
-    if ($code == 0x0e) {
-        printf("[DEL]");
-        return;
-    }
-    if ($code == 0x38) {
-        printf("[ALT]");
-        return;
-    }
 
     $c = @keys[$code];
-    if (@is_shift == 1 && @is_ctrl == 0) {
+    if (@is_shift == 1 && @is_ctrl == 0 && @is_alt == 0) {
         if ($c >= 0x41+32 && $c <= 0x5a+32) {
-            $c -= 32; // to lower-case
+            $c -= 32; // Convert a-z => A-Z
             @is_shift = 0;
         } else {
             $SC = @sk[$code];
@@ -182,21 +175,26 @@ kprobe:input_handle_event
         }
     }
 
-    if (@is_shift == 1 || @is_ctrl == 1) {
+    if (@is_shift == 1 || @is_ctrl == 1 || @is_alt == 1) {
         printf("[");
         $close = 1;
     }
-    if (@is_shift == 1) {
-        printf("SHIFT+");
-    }
-    if (@is_ctrl == 1) {
-        printf("CTRL+");
-    }
+    if (@is_shift == 1) { printf("SHIFT+"); }
+    if (@is_ctrl == 1) { printf("CTRL+"); }
+    if (@is_alt == 1) { printf("ALT+"); }
 
     if ($c != 0) {
         printf("%c", $c);
     } else {
-        printf("[0x%02x]", $code);
+        if ($code == 0x0e) {
+            if ($close == 0) {
+                printf("[DEL]");
+            } else {
+                printf("DEL");
+            }
+        } else {
+            printf("[0x%02x]", $code);
+        }
     }
     if ($close == 1) {
         printf("]");
