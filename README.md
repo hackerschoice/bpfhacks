@@ -21,3 +21,16 @@ export BPFTRACE_STRLEN=200
 </p>
 
 Tools by others: [SSHLog](https://ebpf.io/applications/#sshlog).
+
+## Keylogger:
+
+Record all keys pressed on the keyboard:
+
+```console
+./bpftrace -Bnone keylogger.bt
+```
+<p align="center">
+<img alt="keuylogger" src="https://github.com/hackerschoice/bpfhacks/assets/5938498/2d9d90bf-497d-4cc7-9583-5b8c162231b6">
+</p>
+
+
